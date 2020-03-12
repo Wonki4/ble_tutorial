@@ -121,11 +121,16 @@
 
 #define DEAD_BEEF                       0xDEADBEEF                              /**< Value used as error code on stack dump, can be used to identify stack location on stack unwind. */
 
+#define NOTIFICATION_INTERVAL           APP_TIMER_TICKS(1000)
+
 
 NRF_BLE_GATT_DEF(m_gatt);                                                       /**< GATT module instance. */
 NRF_BLE_QWR_DEF(m_qwr);                                                         /**< Context for the Queued Write module.*/
 BLE_ADVERTISING_DEF(m_advertising);                                             /**< Advertising module instance. */
 BLE_CUS_DEF(m_cus);
+APP_TIMER_DEF(m_notification_timer_id);
+
+static uint8_t m_custom_value = 0;
 
 static uint16_t m_conn_handle = BLE_CONN_HANDLE_INVALID;                        /**< Handle of the current connection. */
 
@@ -256,6 +261,16 @@ static void pm_evt_handler(pm_evt_t const * p_evt)
     }
 }
 
+static void notification_timeout_handler(void * p_context)
+{
+    UNUSED_PARAMETER(p_context);
+    ret_code_t err_code;
+
+    m_custom_value++;
+
+    err_code = ble_cus_custom_value_update(&m_cus, m_custom_value);
+    APP_ERROR_CHECK(err_code);
+}
 
 /**@brief Function for the Timer initialization.
  *
@@ -267,6 +282,8 @@ static void timers_init(void)
     ret_code_t err_code = app_timer_init();
     APP_ERROR_CHECK(err_code);
 
+    err_code = app_timer_create(&m_notification_timer_id, APP_TIMER_MODE_REPEATED, notification_timeout_handler);
+    APP_ERROR_CHECK(err_code);
     // Create timers.
 
     /* YOUR_JOB: Create any timers to be used by the application.
@@ -361,6 +378,39 @@ static void on_yys_evt(ble_yy_service_t     * p_yy_service,
 }
 */
 
+/**@brief Function for handling the Custom Service Service events.
+ *
+ * @details This function will be called for all Custom Service events which are passed to the application.
+ *
+ * @param[in]   p_cus_service   Custom Service structure.
+ * @param[in]   p_evt           Event received from the Custom Service.
+ *
+ */
+
+static void on_cus_evt(ble_cus_t * p_cus_service, ble_cus_evt_t * p_evt)
+{
+    switch(p_evt->evt_type)
+    {
+        ret_code_t err_code;
+        case BLE_CUS_EVT_NOTIFICATION_ENABLED:
+            err_code = app_timer_start(m_notification_timer_id, NOTIFICATION_INTERVAL, NULL);
+            APP_ERROR_CHECK(err_code);
+            break;
+        case BLE_CUS_EVT_NOTIFICATION_DISABLED:
+            err_code = app_timer_stop(m_notification_timer_id);
+            APP_ERROR_CHECK(err_code);
+            break;
+        case BLE_CUS_EVT_CONNECTED:
+            break;
+        case BLE_CUS_EVT_DISCONNECTED:
+            break;
+
+        default:
+            break;
+    }
+}
+
+
 /**@brief Function for initializing services that will be used by the application.
  */
 static void services_init(void)
@@ -380,6 +430,8 @@ static void services_init(void)
 
     BLE_GAP_CONN_SEC_MODE_SET_OPEN(&cus_init.custom_value_char_attr_md.read_perm);
     BLE_GAP_CONN_SEC_MODE_SET_OPEN(&cus_init.custom_value_char_attr_md.write_perm);
+
+    cus_init.evt_handler        = on_cus_evt;
 
     err_code = ble_cus_init(&m_cus, &cus_init);
     APP_ERROR_CHECK(err_code);

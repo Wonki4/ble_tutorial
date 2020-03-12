@@ -11,8 +11,23 @@
 #define CUSTOM_SERVICE_UUID         0x1400
 #define CUSTOM_VALUE_CHAR_UUID      0x1401
 
+typedef enum
+{
+    BLE_CUS_EVT_NOTIFICATION_ENABLED,
+    BLE_CUS_EVT_NOTIFICATION_DISABLED,
+    BLE_CUS_EVT_DISCONNECTED,
+    BLE_CUS_EVT_CONNECTED,
+} ble_cus_evt_type_t;
+
 // Forward declration of the ble_cus_t type.
+typedef struct
+{
+    ble_cus_evt_type_t evt_type;
+} ble_cus_evt_t;
+
 typedef struct ble_cus_s ble_cus_t;
+
+typedef void (*ble_cus_evt_handler_t) (ble_cus_t * p_cus, ble_cus_evt_t * p_evt);
 
 /**@brief   Macro for defining a ble_cus instance.
  *
@@ -29,6 +44,7 @@ NRF_SDH_BLE_OBSERVER(_name ## _obs,                     \
     This contains all options and data needed for initialization of the service.*/
 typedef struct
 {
+    ble_cus_evt_handler_t           evt_handler;
     uint8_t                         initial_custom_value;           /**< Initial custom value */
     ble_srv_cccd_security_mode_t    custom_value_char_attr_md;      /**< Initial security level for Custom characteristics attribute */
 } ble_cus_init_t;
@@ -36,6 +52,7 @@ typedef struct
 /**@brief Custom Service structure. This contains various status information for the service. */
 struct ble_cus_s
 {
+    ble_cus_evt_handler_t       evt_handler;
     uint16_t                    service_handle;
     ble_gatts_char_handles_t    custom_value_handles;
     uint16_t                    conn_handle;
@@ -53,3 +70,5 @@ struct ble_cus_s
 uint32_t ble_cus_init(ble_cus_t * p_cus, const ble_cus_init_t * p_cus_init);
 
 void ble_cus_on_ble_evt( ble_evt_t const * p_ble_evt, void * p_context);
+
+uint32_t ble_cus_custom_value_update(ble_cus_t * p_cus, uint8_t custom_value);
